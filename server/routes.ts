@@ -5,6 +5,7 @@ import { generateSOAPNotes, checkCompliance } from "./openai";
 import { transcribeAudio } from "./whisper";
 import { medicalKnowledge } from "./medical-knowledge";
 import { EHRIntegrationManager, EHR_CONFIGS, type EHRSystemConfig, type EHRConnection } from './ehr-integration.js';
+import { initializeHIPAACompliance, createHIPAAMiddleware } from './hipaa-compliance.js';
 import { insertEncounterSchema, insertComplianceFlagSchema, insertTranscriptSegmentSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -25,7 +26,122 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Get all patients
+  // Initialize HIPAA compliance services
+  const hipaaControls = initializeHIPAACompliance();
+  const hipaaMiddleware = createHIPAAMiddleware(hipaaControls);
+
+  // Authentication endpoints for HIPAA compliance
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        await hipaaControls.audit.logAuthEvent('unknown', 'FAILED_LOGIN', {
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          reason: 'Missing credentials'
+        });
+        return res.status(400).json({ error: "Username and password required" });
+      }
+
+      // In production, validate against real user database
+      // For demo, accept demo credentials
+      const validCredentials = [
+        { username: 'dr.chen', password: 'secure123', userId: 'user-1', roles: ['PHYSICIAN'] },
+        { username: 'nurse.johnson', password: 'secure456', userId: 'user-2', roles: ['NURSE'] },
+        { username: 'admin', password: 'admin789', userId: 'user-3', roles: ['ADMIN'] }
+      ];
+
+      const user = validCredentials.find(u => u.username === username);
+      
+      if (!user || user.password !== password) {
+        await hipaaControls.audit.logAuthEvent('unknown', 'FAILED_LOGIN', {
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          username,
+          reason: 'Invalid credentials'
+        });
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Set user roles for access control
+      hipaaControls.access.setUserRoles(user.userId, user.roles as any);
+
+      // Create secure session
+      const sessionId = hipaaControls.session.createSession(
+        user.userId,
+        req.ip || 'unknown',
+        req.headers['user-agent'] || 'unknown'
+      );
+
+      await hipaaControls.audit.logAuthEvent(user.userId, 'LOGIN', {
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        username
+      });
+
+      res.json({
+        success: true,
+        sessionId,
+        user: {
+          id: user.userId,
+          username: user.username,
+          roles: user.roles
+        },
+        message: "Authentication successful"
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Authentication failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", hipaaMiddleware.authenticate, async (req: any, res) => {
+    try {
+      const sessionId = req.headers.authorization?.replace('Bearer ', '') || 
+                       req.cookies?.sessionId;
+      
+      if (sessionId) {
+        hipaaControls.session.destroySession(sessionId);
+      }
+
+      if (req.user) {
+        await hipaaControls.audit.logAuthEvent(req.user.id, 'LOGOUT', {
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent']
+        });
+      }
+
+      res.json({ success: true, message: "Logout successful" });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/session", hipaaMiddleware.authenticate, async (req: any, res) => {
+    try {
+      const userRoles = hipaaControls.access.getUserRoles(req.user.id);
+      
+      res.json({
+        valid: true,
+        user: {
+          id: req.user.id,
+          roles: userRoles
+        },
+        session: {
+          id: req.session.sessionId,
+          createdAt: req.session.createdAt,
+          lastActivity: req.session.lastActivity
+        }
+      });
+    } catch (error) {
+      console.error("Session validation error:", error);
+      res.status(500).json({ error: "Session validation failed" });
+    }
+  });
+
+  // Get all patients (protected endpoint)
   app.get("/api/patients", async (req, res) => {
     try {
       const storage = await getStorage();
