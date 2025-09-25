@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, MicOff, Save, Pause, Check, OctagonMinus, Info, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, Save, Pause, Check, OctagonMinus, Info, AlertTriangle, Trash2, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { EncounterWithPatient, TranscriptMessage } from "@/lib/types";
 import ComplianceNudges from "@/components/compliance-nudges";
@@ -18,7 +18,7 @@ interface EncounterViewProps {
 export default function EncounterView({ encounterId }: EncounterViewProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+  const [transcript, setTranscript] = useState<(TranscriptMessage & { id?: string })[]>([]);
   const [currentInput, setCurrentInput] = useState("");
   const queryClient = useQueryClient();
 
@@ -81,6 +81,16 @@ export default function EncounterView({ encounterId }: EncounterViewProps) {
     },
   });
 
+  const deleteTranscriptMutation = useMutation({
+    mutationFn: async (segmentId: string) => {
+      const response = await apiRequest("DELETE", `/api/encounters/${encounterId}/transcript/${segmentId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/encounters", encounterId] });
+    },
+  });
+
   // Recording timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -105,6 +115,7 @@ export default function EncounterView({ encounterId }: EncounterViewProps) {
   useEffect(() => {
     if (encounter?.transcriptSegments) {
       const existingTranscript = encounter.transcriptSegments.map(segment => ({
+        id: segment.id,
         speaker: segment.speaker as "doctor" | "patient",
         content: segment.content,
         timestamp: segment.timestamp
@@ -112,6 +123,12 @@ export default function EncounterView({ encounterId }: EncounterViewProps) {
       setTranscript(existingTranscript);
     }
   }, [encounter?.transcriptSegments]);
+
+  const handleDeleteTranscript = (segmentId: string) => {
+    if (confirm("Are you sure you want to delete this transcript segment? This action cannot be undone.")) {
+      deleteTranscriptMutation.mutate(segmentId);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -232,23 +249,57 @@ export default function EncounterView({ encounterId }: EncounterViewProps) {
               <TabsContent value="transcript" className="mt-4">
                 <div className="h-72 overflow-y-auto space-y-3" data-testid="transcript-container">
                   {transcript.map((message, index) => (
-                    <div key={index} className="text-sm">
-                      <span className={`font-medium ${
-                        message.speaker === "doctor" ? "text-primary" : "text-accent"
-                      }`}>
-                        {message.speaker === "doctor" ? "Dr. Chen:" : "Patient:"}
-                      </span>
-                      <span className="ml-2" data-testid={`transcript-message-${index}`}>
-                        {message.content}
-                      </span>
-                      <span className="text-xs text-gray-500 ml-2">
-                        {formatTime(message.timestamp)}
-                      </span>
+                    <div key={message.id || index} className="text-sm group flex items-start justify-between bg-muted/20 p-3 rounded-lg hover:bg-muted/40 transition-colors">
+                      <div className="flex-1">
+                        <span className={`font-medium ${
+                          message.speaker === "doctor" ? "text-primary" : "text-accent"
+                        }`}>
+                          {message.speaker === "doctor" ? "Dr. Chen:" : "Patient:"}
+                        </span>
+                        <span className="ml-2" data-testid={`transcript-message-${index}`}>
+                          {message.content}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2 block mt-1">
+                          {formatTime(message.timestamp)}
+                        </span>
+                      </div>
+                      {message.id && (
+                        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteTranscript(message.id!)}
+                                disabled={deleteTranscriptMutation.isPending}
+                                data-testid={`button-delete-transcript-${index}`}
+                              >
+                                {deleteTranscriptMutation.isPending ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-destructive"></div>
+                                ) : (
+                                  <Trash2 size={14} />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Delete this transcript segment</p>
+                              <p className="text-xs text-muted-foreground">This action cannot be undone</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {transcript.length === 0 && (
                     <div className="text-center text-muted-foreground h-full flex items-center justify-center">
                       Transcript will appear here as audio is recorded...
+                    </div>
+                  )}
+                  {deleteTranscriptMutation.isPending && (
+                    <div className="text-sm text-blue-600 dark:text-blue-400 flex items-center space-x-2 bg-blue-50 dark:bg-blue-950 p-2 rounded">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span>Deleting transcript segment...</span>
                     </div>
                   )}
                 </div>

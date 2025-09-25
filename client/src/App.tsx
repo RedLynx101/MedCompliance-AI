@@ -8,6 +8,7 @@ import Dashboard from "@/pages/dashboard";
 import Encounter from "@/pages/encounter";
 import Analytics from "@/pages/analytics";
 import EHRIntegrationPage from "@/pages/ehr-integration";
+import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/encounter/:id?" component={Encounter} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/ehr-integration" component={EHRIntegrationPage} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

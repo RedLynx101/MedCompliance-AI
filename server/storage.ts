@@ -32,6 +32,7 @@ export interface IStorage {
   // Transcript Segments
   getTranscriptSegments(encounterId: string): Promise<TranscriptSegment[]>;
   createTranscriptSegment(segment: InsertTranscriptSegment): Promise<TranscriptSegment>;
+  deleteTranscriptSegment(segmentId: string): Promise<void>;
 
   // Analytics
   getAnalytics(): Promise<Analytics[]>;
@@ -312,6 +313,10 @@ export class MemStorage implements IStorage {
     return segment;
   }
 
+  async deleteTranscriptSegment(segmentId: string): Promise<void> {
+    this.transcriptSegments.delete(segmentId);
+  }
+
   // Analytics
   async getAnalytics(): Promise<Analytics[]> {
     return Array.from(this.analytics.values());
@@ -418,6 +423,10 @@ export class PostgreSQLStorage implements IStorage {
   async createTranscriptSegment(insertSegment: InsertTranscriptSegment): Promise<TranscriptSegment> {
     const result = await this.db.insert(transcriptSegments).values(insertSegment).returning();
     return result[0];
+  }
+
+  async deleteTranscriptSegment(segmentId: string): Promise<void> {
+    await this.db.delete(transcriptSegments).where(eq(transcriptSegments.id, segmentId));
   }
 
   // Analytics

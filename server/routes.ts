@@ -315,6 +315,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete transcript segment
+  app.delete("/api/encounters/:encounterId/transcript/:segmentId", async (req, res) => {
+    try {
+      const storage = await getStorage();
+      await storage.deleteTranscriptSegment(req.params.segmentId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting transcript segment:", error);
+      res.status(500).json({ error: "Failed to delete transcript segment" });
+    }
+  });
+
   // Add transcript segment and generate SOAP notes (legacy endpoint for manual input)
   app.post("/api/encounters/:id/transcript", async (req, res) => {
     try {
