@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Stethoscope, Settings, User } from "lucide-react";
+import { Stethoscope, Settings, User, Database } from "lucide-react";
 
 export default function Navigation() {
   const [location] = useLocation();
@@ -42,6 +42,14 @@ export default function Navigation() {
                     isActive("/analytics") ? "tab-active" : "text-muted-foreground hover:text-foreground"
                   }`}>
                     Analytics
+                  </button>
+                </Link>
+                <Link href="/ehr-integration" data-testid="nav-ehr-integration">
+                  <button className={`px-3 py-2 text-sm font-medium ${
+                    isActive("/ehr-integration") ? "tab-active" : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                    <Database className="mr-1 h-4 w-4 inline" />
+                    EHR Integration
                   </button>
                 </Link>
               </div>

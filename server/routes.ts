@@ -4,6 +4,7 @@ import { getStorage } from "./storage";
 import { generateSOAPNotes, checkCompliance } from "./openai";
 import { transcribeAudio } from "./whisper";
 import { medicalKnowledge } from "./medical-knowledge";
+import { EHRIntegrationManager, EHR_CONFIGS, type EHRSystemConfig, type EHRConnection } from './ehr-integration.js';
 import { insertEncounterSchema, insertComplianceFlagSchema, insertTranscriptSegmentSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -370,6 +371,190 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(codeInfo);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch CPT information" });
+    }
+  });
+
+  // Initialize EHR Integration Manager
+  const ehrManager = new EHRIntegrationManager();
+
+  // EHR Integration API endpoints
+  
+  // Get available EHR systems
+  app.get("/api/ehr/systems", async (req, res) => {
+    try {
+      const systems = Object.keys(EHR_CONFIGS).map(name => ({
+        name,
+        displayName: name,
+        isSupported: true,
+        description: `${name} FHIR R4 integration with OAuth 2.0`
+      }));
+      res.json(systems);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch EHR systems" });
+    }
+  });
+
+  // Initialize EHR connection (start OAuth flow)
+  app.post("/api/ehr/connect", async (req, res) => {
+    try {
+      const { systemName, baseUrl, clientId, redirectUri } = req.body;
+      
+      if (!EHR_CONFIGS[systemName]) {
+        return res.status(400).json({ error: "Unsupported EHR system" });
+      }
+
+      const config: EHRSystemConfig = {
+        ...EHR_CONFIGS[systemName],
+        baseUrl,
+        clientId,
+        clientSecret: '', // Will be set during token exchange
+      } as EHRSystemConfig;
+
+      const ehrService = ehrManager.getEHRService(systemName, config);
+      const state = `${systemName}-${Date.now()}-${Math.random().toString(36)}`;
+      const authUrl = ehrService.generateAuthUrl(state, redirectUri);
+
+      // Store connection state (in production, use secure session/database)
+      // For now, we'll return the auth URL and expect the frontend to handle OAuth
+      
+      res.json({
+        authUrl,
+        state,
+        systemName,
+        message: `Ready to connect to ${systemName}. Please complete OAuth authorization.`
+      });
+    } catch (error) {
+      console.error("EHR connection error:", error);
+      res.status(500).json({ error: "Failed to initialize EHR connection" });
+    }
+  });
+
+  // Complete EHR OAuth flow (exchange code for token)
+  app.post("/api/ehr/oauth/callback", async (req, res) => {
+    try {
+      const { code, state, redirectUri, systemName, baseUrl, clientId, clientSecret } = req.body;
+
+      if (!EHR_CONFIGS[systemName]) {
+        return res.status(400).json({ error: "Invalid EHR system" });
+      }
+
+      const config: EHRSystemConfig = {
+        ...EHR_CONFIGS[systemName],
+        baseUrl,
+        clientId,
+        clientSecret,
+      } as EHRSystemConfig;
+
+      const ehrService = ehrManager.getEHRService(systemName, config);
+      const tokenData = await ehrService.exchangeCodeForToken(code, redirectUri);
+
+      // Create EHR connection record
+      const connection: EHRConnection = {
+        id: `ehr-${systemName.toLowerCase()}-${Date.now()}`,
+        providerId: 'current-user', // In production, use actual provider/user ID
+        systemConfig: config,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        tokenExpiry: new Date(Date.now() + (tokenData.expires_in * 1000)),
+        isActive: true,
+        lastSync: new Date()
+      };
+
+      ehrManager.registerConnection(connection);
+
+      res.json({
+        success: true,
+        connectionId: connection.id,
+        systemName,
+        expiresAt: connection.tokenExpiry,
+        patientId: 'patient' in tokenData ? tokenData.patient : undefined,
+        message: `Successfully connected to ${systemName}`
+      });
+    } catch (error) {
+      console.error("OAuth callback error:", error);
+      res.status(500).json({ error: "Failed to complete EHR authentication" });
+    }
+  });
+
+  // Sync encounter with EHR system
+  app.post("/api/encounters/:id/sync-ehr", async (req, res) => {
+    try {
+      const storage = await getStorage();
+      const { connectionId } = req.body;
+
+      const encounter = await storage.getEncounter(req.params.id);
+      if (!encounter) {
+        return res.status(404).json({ error: "Encounter not found" });
+      }
+
+      const patient = await storage.getPatient(encounter.patientId);
+      if (!patient) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+
+      const result = await ehrManager.syncEncounterWithEHR(
+        req.params.id,
+        encounter,
+        patient,
+        connectionId
+      );
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      // Update encounter with EHR sync info
+      await storage.updateEncounter(req.params.id, {
+        // Add EHR sync metadata if needed
+      });
+
+      res.json({
+        success: true,
+        ehrEncounterId: result.ehrEncounterId,
+        message: "Encounter successfully synced with EHR system"
+      });
+    } catch (error) {
+      console.error("EHR sync error:", error);
+      res.status(500).json({ error: "Failed to sync encounter with EHR" });
+    }
+  });
+
+  // Import patient from EHR
+  app.post("/api/ehr/import-patient", async (req, res) => {
+    try {
+      const storage = await getStorage();
+      const { ehrPatientId, connectionId } = req.body;
+
+      const result = await ehrManager.importPatientFromEHR(ehrPatientId, connectionId);
+
+      if (!result.success || !result.patient) {
+        return res.status(400).json({ error: result.error || "Failed to import patient" });
+      }
+
+      // Convert FHIR patient to internal format and store
+      const fhirPatient = result.patient;
+      const patientData = {
+        firstName: fhirPatient.name?.[0]?.given?.[0] || 'Unknown',
+        lastName: fhirPatient.name?.[0]?.family || 'Unknown',
+        dateOfBirth: fhirPatient.birthDate || '1900-01-01',
+        gender: fhirPatient.gender || 'unknown',
+        medicalRecordNumber: fhirPatient.identifier?.find(id => 
+          id.system === 'http://hl7.org/fhir/sid/us-ssn'
+        )?.value || `EHR-${ehrPatientId}`,
+        phone: fhirPatient.telecom?.find(t => t.system === 'phone')?.value
+      };
+
+      const newPatient = await storage.createPatient(patientData);
+
+      res.json({
+        success: true,
+        patient: newPatient,
+        ehrPatientId,
+        message: "Patient successfully imported from EHR system"
+      });
+    } catch (error) {
+      console.error("Patient import error:", error);
+      res.status(500).json({ error: "Failed to import patient from EHR" });
     }
   });
 
