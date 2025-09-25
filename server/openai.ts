@@ -31,7 +31,7 @@ export interface ComplianceCheck {
 export async function generateSOAPNotes(transcript: string): Promise<SOAPNotes> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
@@ -43,14 +43,13 @@ export async function generateSOAPNotes(transcript: string): Promise<SOAPNotes> 
             "plan": "Treatment plan and follow-up"
           }
           
-          Ensure all sections are detailed and clinically appropriate. If information is missing for any section, note what should be added.`
+          Ensure all sections are detailed and clinically appropriate. If information is missing for any section, note what should be added. Return ONLY valid JSON.`
         },
         {
           role: "user",
           content: `Generate SOAP notes from this encounter transcript:\n\n${transcript}`
         }
       ],
-      response_format: { type: "json_object" },
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -69,7 +68,7 @@ export async function generateSOAPNotes(transcript: string): Promise<SOAPNotes> 
 export async function checkCompliance(soapNotes: SOAPNotes, transcript: string): Promise<ComplianceCheck> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
@@ -94,7 +93,7 @@ export async function checkCompliance(soapNotes: SOAPNotes, transcript: string):
             "riskScore": 72
           }
           
-          Focus on CMS requirements, ICD-10/CPT coding accuracy, and documentation completeness. Risk score should be 0-100 where 0 is highest risk.`
+          Focus on CMS requirements, ICD-10/CPT coding accuracy, and documentation completeness. Risk score should be 0-100 where 0 is highest risk. Return ONLY valid JSON.`
         },
         {
           role: "user",
@@ -110,7 +109,6 @@ export async function checkCompliance(soapNotes: SOAPNotes, transcript: string):
           ${transcript}`
         }
       ],
-      response_format: { type: "json_object" },
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -128,7 +126,7 @@ export async function checkCompliance(soapNotes: SOAPNotes, transcript: string):
 export async function enhanceDocumentation(currentText: string, context: string): Promise<string> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
