@@ -190,9 +190,9 @@ This project was developed as part of an AI Strategy course, focusing on:
 ## 📞 Contact & Portfolio
 
 **Developed by:** Noah Hicks
-**LinkedIn:** [[Your LinkedIn Profile]](https://www.linkedin.com/in/noahhicks101/)
-**Portfolio:** noahhicks.com
-**Email:** [Your Email]
+**LinkedIn:** [Noah Hicks LinkedIn](https://www.linkedin.com/in/noahhicks101/)
+**Portfolio:** [noahhicks.com](https://noahhicks.com)
+**Email:** noahhicks101@gmail.com
 
 ---
 
