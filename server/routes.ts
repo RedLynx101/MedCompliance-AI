@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { getStorage } from "./storage";
 import { generateSOAPNotes, checkCompliance } from "./openai";
 import { insertEncounterSchema, insertComplianceFlagSchema, insertTranscriptSegmentSchema } from "@shared/schema";
 
@@ -8,6 +8,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all patients
   app.get("/api/patients", async (req, res) => {
     try {
+      const storage = await getStorage();
       const patients = await storage.getPatients();
       res.json(patients);
     } catch (error) {
@@ -18,6 +19,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all encounters with patient data
   app.get("/api/encounters", async (req, res) => {
     try {
+      const storage = await getStorage();
       const encounters = await storage.getEncounters();
       const patients = await storage.getPatients();
       
@@ -38,6 +40,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get specific encounter
   app.get("/api/encounters/:id", async (req, res) => {
     try {
+      const storage = await getStorage();
       const encounter = await storage.getEncounter(req.params.id);
       if (!encounter) {
         return res.status(404).json({ error: "Encounter not found" });
@@ -61,6 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update encounter
   app.patch("/api/encounters/:id", async (req, res) => {
     try {
+      const storage = await getStorage();
       const updated = await storage.updateEncounter(req.params.id, req.body);
       res.json(updated);
     } catch (error) {
@@ -71,6 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add transcript segment and generate SOAP notes
   app.post("/api/encounters/:id/transcript", async (req, res) => {
     try {
+      const storage = await getStorage();
       const { speaker, content, timestamp } = req.body;
       
       // Add transcript segment
@@ -84,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all transcript segments for this encounter
       const allSegments = await storage.getTranscriptSegments(req.params.id);
       const fullTranscript = allSegments
-        .map(s => `${s.speaker}: ${s.content}`)
+        .map((s: any) => `${s.speaker}: ${s.content}`)
         .join('\n');
 
       // Generate updated SOAP notes
@@ -125,6 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Handle compliance flag actions
   app.patch("/api/compliance-flags/:id", async (req, res) => {
     try {
+      const storage = await getStorage();
       const { userAction } = req.body;
       const updated = await storage.updateComplianceFlag(req.params.id, {
         userAction,
@@ -139,13 +145,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get analytics data
   app.get("/api/analytics", async (req, res) => {
     try {
+      const storage = await getStorage();
       const analytics = await storage.getAnalytics();
       
       // Calculate aggregate metrics
-      const totalPatients = analytics.reduce((sum, a) => sum + a.patientsCount, 0);
-      const avgComplianceScore = analytics.reduce((sum, a) => sum + a.complianceScore, 0) / analytics.length;
-      const totalTimeSaved = analytics.reduce((sum, a) => sum + a.timeSaved, 0);
-      const avgDenialRate = analytics.reduce((sum, a) => sum + a.denialRate, 0) / analytics.length;
+      const totalPatients = analytics.reduce((sum: number, a: any) => sum + a.patientsCount, 0);
+      const avgComplianceScore = analytics.reduce((sum: number, a: any) => sum + a.complianceScore, 0) / analytics.length;
+      const totalTimeSaved = analytics.reduce((sum: number, a: any) => sum + a.timeSaved, 0);
+      const avgDenialRate = analytics.reduce((sum: number, a: any) => sum + a.denialRate, 0) / analytics.length;
       
       // Calculate estimated cost savings (assuming $150/hour saved)
       const monthlyCostSavings = totalTimeSaved * 4 * 150; // 4 weeks * $150/hour
@@ -168,6 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate post-visit report
   app.get("/api/encounters/:id/report", async (req, res) => {
     try {
+      const storage = await getStorage();
       const encounter = await storage.getEncounter(req.params.id);
       if (!encounter) {
         return res.status(404).json({ error: "Encounter not found" });
@@ -175,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const patient = await storage.getPatient(encounter.patientId);
       const complianceFlags = await storage.getComplianceFlags(req.params.id);
-      const unresolvedFlags = complianceFlags.filter(f => !f.isResolved);
+      const unresolvedFlags = complianceFlags.filter((f: any) => !f.isResolved);
       
       // Calculate claim risk assessment
       let riskLevel = "Low";
