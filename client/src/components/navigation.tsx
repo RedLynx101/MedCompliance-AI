@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
-import { Stethoscope, Settings, User, Database, ChevronDown, Bell, Shield, Menu, X } from "lucide-react";
+import { Settings, User, Database, ChevronDown, Bell, Shield, Menu, X } from "lucide-react";
 import { useState } from "react";
+import logoIcon from "@assets/MedCompliance Favicon_1758767396085.png";
 
 export default function Navigation() {
   const [location] = useLocation();
@@ -32,8 +33,8 @@ export default function Navigation() {
           <div className="flex items-center md:hidden">
             <div className="flex-shrink-0">
               <h1 className="text-lg font-bold text-white flex items-center group cursor-pointer">
-                <div className="bg-white/10 p-1.5 rounded-lg mr-2 group-hover:bg-white/20 transition-colors">
-                  <Stethoscope className="text-white" size={20} />
+                <div className="bg-white p-1.5 rounded-lg mr-2 group-hover:bg-gray-100 transition-colors">
+                  <img src={logoIcon} alt="MedCompliance AI Logo" className="w-5 h-5 object-contain" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-base font-bold leading-tight">MedCompliance AI</span>
@@ -46,8 +47,8 @@ export default function Navigation() {
           <div className="hidden md:flex items-center">
             <div className="flex-shrink-0">
               <h1 className="text-2xl font-bold text-white flex items-center group cursor-pointer">
-                <div className="bg-white/10 p-2 rounded-lg mr-3 group-hover:bg-white/20 transition-colors">
-                  <Stethoscope className="text-white" size={28} />
+                <div className="bg-white p-2 rounded-lg mr-3 group-hover:bg-gray-100 transition-colors">
+                  <img src={logoIcon} alt="MedCompliance AI Logo" className="w-7 h-7 object-contain" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xl font-bold">MedCompliance AI</span>
