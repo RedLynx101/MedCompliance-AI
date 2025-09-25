@@ -2,7 +2,25 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { getStorage } from "./storage";
 import { generateSOAPNotes, checkCompliance } from "./openai";
+import { transcribeAudio } from "./whisper";
 import { insertEncounterSchema, insertComplianceFlagSchema, insertTranscriptSegmentSchema } from "@shared/schema";
+import multer from "multer";
+
+// Configure multer for handling audio uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB limit for audio files
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept audio files
+    if (file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'));
+    }
+  },
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all patients
@@ -72,7 +90,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add transcript segment and generate SOAP notes
+  // Upload and transcribe audio
+  app.post("/api/encounters/:id/transcribe", upload.single('audio'), async (req, res) => {
+    try {
+      const storage = await getStorage();
+      
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: "No audio file provided",
+          code: "MISSING_AUDIO_FILE" 
+        });
+      }
+
+      // Validate encounter exists
+      const encounter = await storage.getEncounter(req.params.id);
+      if (!encounter) {
+        return res.status(404).json({ 
+          error: "Encounter not found",
+          code: "ENCOUNTER_NOT_FOUND" 
+        });
+      }
+
+      // Validate and parse request body
+      const speakerSchema = insertTranscriptSegmentSchema.pick({ speaker: true });
+      const timestampSchema = insertTranscriptSegmentSchema.pick({ timestamp: true });
+      
+      const speakerResult = speakerSchema.safeParse({ speaker: req.body.speaker });
+      const timestampResult = timestampSchema.safeParse({ timestamp: parseInt(req.body.timestamp) || 0 });
+      
+      if (!speakerResult.success || !timestampResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid speaker or timestamp",
+          code: "VALIDATION_ERROR",
+          details: {
+            speaker: speakerResult.error?.issues,
+            timestamp: timestampResult.error?.issues
+          }
+        });
+      }
+
+      const { speaker } = speakerResult.data;
+      const { timestamp } = timestampResult.data;
+      
+      // Transcribe audio using Whisper with correct MIME type
+      const transcribedText = await transcribeAudio(
+        req.file.buffer, 
+        req.file.mimetype, 
+        req.file.originalname
+      );
+      
+      if (!transcribedText.trim()) {
+        return res.status(400).json({ 
+          error: "No speech detected in audio",
+          code: "NO_SPEECH_DETECTED" 
+        });
+      }
+
+      // Add transcript segment
+      const segment = await storage.createTranscriptSegment({
+        encounterId: req.params.id,
+        speaker,
+        content: transcribedText.trim(),
+        timestamp
+      });
+
+      // Get all transcript segments for this encounter
+      const allSegments = await storage.getTranscriptSegments(req.params.id);
+      const fullTranscript = allSegments
+        .map((s: any) => `${s.speaker}: ${s.content}`)
+        .join('\n');
+
+      // Generate updated SOAP notes
+      const soapNotes = await generateSOAPNotes(fullTranscript);
+      
+      // Check compliance
+      const complianceCheck = await checkCompliance(soapNotes, fullTranscript);
+      
+      // Update encounter with new SOAP notes and risk score
+      await storage.updateEncounter(req.params.id, {
+        soapNotes,
+        claimRiskScore: 100 - complianceCheck.riskScore // Invert so higher score = higher risk
+      });
+
+      // Create compliance flags
+      for (const flag of complianceCheck.flags) {
+        await storage.createComplianceFlag({
+          encounterId: req.params.id,
+          flagType: flag.type,
+          severity: flag.severity,
+          message: flag.message,
+          explanation: flag.explanation
+        });
+      }
+
+      res.json({
+        segment,
+        transcribedText,
+        soapNotes,
+        complianceFlags: complianceCheck.flags,
+        suggestions: complianceCheck.suggestions
+      });
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      res.status(500).json({ error: "Failed to transcribe audio" });
+    }
+  });
+
+  // Add transcript segment and generate SOAP notes (legacy endpoint for manual input)
   app.post("/api/encounters/:id/transcript", async (req, res) => {
     try {
       const storage = await getStorage();
