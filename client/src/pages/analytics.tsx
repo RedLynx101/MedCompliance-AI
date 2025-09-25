@@ -89,7 +89,7 @@ export default function Analytics() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Weekly Time Saved</p>
-                  <p className="text-3xl font-bold text-accent" data-testid="metric-time-saved">{weeklyTimeSaved}hrs</p>
+                  <p className="text-3xl font-bold text-accent" data-testid="metric-time-saved">{weeklyTimeSaved.toFixed(1)} hrs</p>
                   <p className="text-xs text-accent">Per physician</p>
                 </div>
                 <div className="p-3 bg-accent/10 rounded-lg">

@@ -6,6 +6,7 @@ import { transcribeAudio } from "./whisper";
 import { medicalKnowledge } from "./medical-knowledge";
 import { EHRIntegrationManager, EHR_CONFIGS, type EHRSystemConfig, type EHRConnection } from './ehr-integration.js';
 import { initializeHIPAACompliance, createHIPAAMiddleware } from './hipaa-compliance.js';
+import { analyticsEngine } from './analytics-engine.js';
 import { insertEncounterSchema, insertComplianceFlagSchema, insertTranscriptSegmentSchema } from "@shared/schema";
 import multer from "multer";
 
