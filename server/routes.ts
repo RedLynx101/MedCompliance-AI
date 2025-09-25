@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { getStorage } from "./storage";
 import { generateSOAPNotes, checkCompliance } from "./openai";
 import { transcribeAudio } from "./whisper";
+import { medicalKnowledge } from "./medical-knowledge";
 import { insertEncounterSchema, insertComplianceFlagSchema, insertTranscriptSegmentSchema } from "@shared/schema";
 import multer from "multer";
 
@@ -163,8 +164,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate updated SOAP notes
       const soapNotes = await generateSOAPNotes(fullTranscript);
       
-      // Check compliance
-      const complianceCheck = await checkCompliance(soapNotes, fullTranscript);
+      // Enhanced compliance checking with medical knowledge base
+      const complianceCheck = await medicalKnowledge.enhancedComplianceCheck(encounter, fullTranscript);
       
       // Update encounter with new SOAP notes and risk score
       await storage.updateEncounter(req.params.id, {
@@ -219,8 +220,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate updated SOAP notes
       const soapNotes = await generateSOAPNotes(fullTranscript);
       
-      // Check compliance
-      const complianceCheck = await checkCompliance(soapNotes, fullTranscript);
+      // Get encounter for compliance checking
+      const encounter = await storage.getEncounter(req.params.id);
+      if (!encounter) {
+        return res.status(404).json({ error: "Encounter not found" });
+      }
+      
+      // Enhanced compliance checking with medical knowledge base
+      const complianceCheck = await medicalKnowledge.enhancedComplianceCheck(encounter, fullTranscript);
       
       // Update encounter with new SOAP notes and risk score
       await storage.updateEncounter(req.params.id, {
@@ -328,6 +335,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  // Medical Knowledge Base API endpoints
+  app.get("/api/medical-knowledge/cms-guidelines", async (req, res) => {
+    try {
+      const category = req.query.category as string;
+      const guidelines = medicalKnowledge.getCMSGuidelines(category);
+      res.json(guidelines);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch CMS guidelines" });
+    }
+  });
+
+  app.get("/api/medical-knowledge/icd10/:code", async (req, res) => {
+    try {
+      const codeInfo = medicalKnowledge.getICD10Info(req.params.code);
+      if (!codeInfo) {
+        return res.status(404).json({ error: "ICD-10 code not found" });
+      }
+      res.json(codeInfo);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch ICD-10 information" });
+    }
+  });
+
+  app.get("/api/medical-knowledge/cpt/:code", async (req, res) => {
+    try {
+      const codeInfo = medicalKnowledge.getCPTInfo(req.params.code);
+      if (!codeInfo) {
+        return res.status(404).json({ error: "CPT code not found" });
+      }
+      res.json(codeInfo);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch CPT information" });
     }
   });
 
