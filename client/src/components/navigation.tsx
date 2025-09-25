@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Settings, User, Database, ChevronDown, Bell, Shield, Menu, X } from "lucide-react";
 import { useState } from "react";
-import logoIcon from "@assets/MedCompliance Favicon_1758767396085.png";
+import logoIcon from "/MedCompliance Favicon.png";
 
 export default function Navigation() {
   const [location] = useLocation();
