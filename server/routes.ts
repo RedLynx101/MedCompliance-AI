@@ -506,6 +506,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize EHR Integration Manager
   const ehrManager = new EHRIntegrationManager();
 
+  // Database seeding endpoint for production deployment
+  app.post("/api/admin/seed-database", async (req, res) => {
+    try {
+      const { seedDatabase } = await import("./storage.js");
+      await seedDatabase();
+      res.json({ success: true, message: "Database seeded successfully" });
+    } catch (error) {
+      console.error('Manual seeding error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // EHR Integration API endpoints
   
   // Get available EHR systems

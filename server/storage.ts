@@ -574,10 +574,22 @@ export async function seedDatabase() {
 
 // Initialize storage based on environment
 const createStorage = async (): Promise<IStorage> => {
+  // Always use PostgreSQL storage when DATABASE_URL is available
+  if (!process.env.DATABASE_URL) {
+    console.error('ERROR: DATABASE_URL not found! Using memory storage as fallback.');
+    return new MemStorage();
+  }
+  
+  console.log('Initializing PostgreSQL storage for production...');
   const storage = new PostgreSQLStorage();
   
   // Seed database if needed (for demo purposes, seed in both dev and production)
-  await seedDatabase();
+  try {
+    await seedDatabase();
+    console.log('Database seeding completed successfully');
+  } catch (error) {
+    console.error('Database seeding error:', error);
+  }
   
   return storage;
 };
