@@ -189,9 +189,9 @@ This project was developed as part of an AI Strategy course, focusing on:
 
 ## 📞 Contact & Portfolio
 
-**Developed by:** [Your Name]
-**LinkedIn:** [Your LinkedIn Profile]
-**Portfolio:** [Your Portfolio Website]
+**Developed by:** Noah Hicks
+**LinkedIn:** [[Your LinkedIn Profile]](https://www.linkedin.com/in/noahhicks101/)
+**Portfolio:** noahhicks.com
 **Email:** [Your Email]
 
 ---
@@ -203,7 +203,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - OpenAI for providing advanced language models
-- The healthcare professionals who provided domain expertise
 - The open-source community for the incredible tools and libraries
 
 ---
