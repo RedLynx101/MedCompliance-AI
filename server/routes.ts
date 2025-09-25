@@ -675,14 +675,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Convert FHIR patient to internal format and store
       const fhirPatient = result.patient;
       const patientData = {
-        firstName: fhirPatient.name?.[0]?.given?.[0] || 'Unknown',
-        lastName: fhirPatient.name?.[0]?.family || 'Unknown',
+        name: `${fhirPatient.name?.[0]?.given?.[0] || 'Unknown'} ${fhirPatient.name?.[0]?.family || 'Unknown'}`,
         dateOfBirth: fhirPatient.birthDate || '1900-01-01',
-        gender: fhirPatient.gender || 'unknown',
-        medicalRecordNumber: fhirPatient.identifier?.find(id => 
+        mrn: fhirPatient.identifier?.find(id => 
           id.system === 'http://hl7.org/fhir/sid/us-ssn'
-        )?.value || `EHR-${ehrPatientId}`,
-        phone: fhirPatient.telecom?.find(t => t.system === 'phone')?.value
+        )?.value || `EHR-${ehrPatientId}`
       };
 
       const newPatient = await storage.createPatient(patientData);
