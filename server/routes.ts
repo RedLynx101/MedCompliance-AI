@@ -514,7 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, message: "Database seeded successfully" });
     } catch (error) {
       console.error('Manual seeding error:', error);
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
