@@ -576,10 +576,8 @@ export async function seedDatabase() {
 const createStorage = async (): Promise<IStorage> => {
   const storage = new PostgreSQLStorage();
   
-  // Seed database if needed
-  if (process.env.NODE_ENV === 'development') {
-    await seedDatabase();
-  }
+  // Seed database if needed (for demo purposes, seed in both dev and production)
+  await seedDatabase();
   
   return storage;
 };
